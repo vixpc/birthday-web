@@ -49,8 +49,9 @@ export default function Home() {
         </section>
 
         <section className="heart-section">
-          <h2>💖 Trái Tim Ma Trận</h2>
-          <HeartMatrix width={500} height={350} />
+          <h2>💖 Trái Tim Yêu Thương</h2>
+          <p style={{opacity: 0.9, marginTop: 8}}>Nhịp đập của yêu thương được vẽ nên từ hàng ngàn tia sáng.</p>
+          <HeartMatrix width={560} height={380} />
         </section>
       </main>
 
@@ -141,7 +142,7 @@ export default function Home() {
         
         .heart-section h2 {
           font-size: 2rem;
-          margin: 0 0 30px 0;
+          margin: 0 0 10px 0;
           text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
         }
         

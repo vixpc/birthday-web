@@ -7,7 +7,7 @@ interface HeartMatrixProps {
   height?: number;
 }
 
-export default function HeartMatrix({ width = 400, height = 300 }: HeartMatrixProps) {
+export default function HeartMatrix({ width = 500, height = 350 }: HeartMatrixProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -20,110 +20,163 @@ export default function HeartMatrix({ width = 400, height = 300 }: HeartMatrixPr
     canvas.width = width;
     canvas.height = height;
 
-    const particles: Array<{
+    type Particle = {
       x: number;
       y: number;
       vx: number;
       vy: number;
       life: number;
       maxLife: number;
-    }> = [];
+      hue: number;
+      size: number;
+    };
 
-    // Heart parametric equation
+    const particles: Particle[] = [];
+    const stars: { x: number; y: number; r: number; phase: number }[] = [];
+
     const getHeartPoint = (t: number) => {
       const x = 16 * Math.pow(Math.sin(t), 3);
       const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
       return { x, y };
     };
 
-    // Create particles along heart shape
+    const centerX = width / 2;
+    const centerY = height / 2 + 10;
+    const scale = Math.min(width, height) / 18;
+
     const createHeartParticles = () => {
-      for (let t = 0; t < 2 * Math.PI; t += 0.1) {
+      for (let t = 0; t < Math.PI * 2; t += 0.06) {
         const { x, y } = getHeartPoint(t);
-        const centerX = width / 2;
-        const centerY = height / 2;
-        const scale = 8;
-        
         particles.push({
           x: centerX + x * scale,
           y: centerY - y * scale,
-          vx: (Math.random() - 0.5) * 2,
-          vy: (Math.random() - 0.5) * 2,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: (Math.random() - 0.5) * 0.6,
           life: 1,
-          maxLife: 1
+          maxLife: 1,
+          hue: 350 + Math.random() * 20, // pink-red range
+          size: 2.5 + Math.random() * 1.5,
         });
       }
     };
 
-    // Add floating particles
-    const addFloatingParticles = () => {
-      for (let i = 0; i < 5; i++) {
-        particles.push({
+    const createStars = () => {
+      stars.length = 0;
+      const count = Math.round((width * height) / 9000);
+      for (let i = 0; i < count; i++) {
+        stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          vx: (Math.random() - 0.5) * 1,
-          vy: (Math.random() - 0.5) * 1,
-          life: Math.random() * 0.5 + 0.5,
-          maxLife: 1
+          r: Math.random() * 1.2 + 0.4,
+          phase: Math.random() * Math.PI * 2,
         });
       }
     };
 
     createHeartParticles();
+    createStars();
 
-    const animate = () => {
-      ctx.clearRect(0, 0, width, height);
+    // Soft trail: draw semi-transparent overlay each frame
+    const drawTrail = () => {
+      const grd = ctx.createLinearGradient(0, 0, width, height);
+      grd.addColorStop(0, 'rgba(255, 107, 107, 0.06)');
+      grd.addColorStop(1, 'rgba(255, 182, 193, 0.06)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, width, height);
+    };
+
+    const drawHeartGlow = (time: number) => {
+      // Draw a glowing heart stroke beneath particles
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(scale, -scale);
+      ctx.beginPath();
+      for (let t = 0; t <= Math.PI * 2; t += 0.02) {
+        const { x, y } = getHeartPoint(t);
+        if (t === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      const pulse = 0.5 + 0.5 * Math.sin(time * 0.002);
+      ctx.lineWidth = 0.9 + pulse * 0.6;
+      ctx.strokeStyle = 'rgba(255, 105, 180, 0.55)';
+      ctx.shadowBlur = 18 + pulse * 18;
+      ctx.shadowColor = 'rgba(255, 105, 180, 0.9)';
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    const drawStars = (time: number) => {
+      ctx.save();
+      for (const s of stars) {
+        const twinkle = 0.6 + 0.4 * Math.sin(time * 0.003 + s.phase);
+        ctx.globalAlpha = twinkle * 0.8;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r * (0.8 + twinkle * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    };
+
+    const animate = (time: number) => {
+      // Clear with light fade to keep soft trails
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.fillRect(0, 0, width, height);
+
+      drawStars(time);
+      drawHeartGlow(time);
+      drawTrail();
 
       // Update and draw particles
       for (let i = particles.length - 1; i >= 0; i--) {
-        const particle = particles[i];
-        
-        // Update position
-        particle.x += particle.vx;
-        particle.y += particle.vy;
-        
-        // Update life
-        particle.life -= 0.01;
-        
-        // Remove dead particles
-        if (particle.life <= 0) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.008;
+        if (p.life <= 0) {
           particles.splice(i, 1);
           continue;
         }
-        
-        // Draw particle
-        const alpha = particle.life;
-        const size = 3 * particle.life;
-        
+        const alpha = Math.max(0, p.life);
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = '#ff6b6b';
+        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+        gradient.addColorStop(0, `hsla(${p.hue}, 90%, 70%, 1)`);
+        gradient.addColorStop(1, `hsla(${p.hue}, 90%, 50%, 0)`);
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, size, 0, 2 * Math.PI);
+        ctx.arc(p.x, p.y, p.size * 1.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // Add new floating particles occasionally
-      if (Math.random() < 0.1) {
-        addFloatingParticles();
-      }
-
-      // Recreate heart particles when they're all gone
-      if (particles.length === 0) {
-        setTimeout(() => {
-          createHeartParticles();
-        }, 1000);
+      // Replenish particles to keep the heart vivid
+      if (particles.length < 180) {
+        for (let k = 0; k < 6; k++) {
+          const t = Math.random() * Math.PI * 2;
+          const { x, y } = getHeartPoint(t);
+          particles.push({
+            x: centerX + x * scale,
+            y: centerY - y * scale,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: (Math.random() - 0.5) * 0.6,
+            life: 0.7 + Math.random() * 0.6,
+            maxLife: 1,
+            hue: 340 + Math.random() * 30,
+            size: 2 + Math.random() * 2,
+          });
+        }
       }
 
       requestAnimationFrame(animate);
     };
 
-    animate();
+    // Initialize background softly
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.fillRect(0, 0, width, height);
 
-    return () => {
-      // Cleanup if needed
-    };
+    const raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
   }, [width, height]);
 
   return (
@@ -132,9 +185,9 @@ export default function HeartMatrix({ width = 400, height = 300 }: HeartMatrixPr
         ref={canvasRef}
         className="heart-canvas"
         style={{
-          border: '2px solid #ff6b6b',
-          borderRadius: '12px',
-          background: 'linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%)'
+          border: '0px solid transparent',
+          borderRadius: '16px',
+          background: 'radial-gradient(1200px 500px at 10% 10%, rgba(255,255,255,0.09), rgba(255,255,255,0) 60%), linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
         }}
       />
       <style jsx>{`
@@ -144,7 +197,7 @@ export default function HeartMatrix({ width = 400, height = 300 }: HeartMatrixPr
           padding: 20px;
         }
         .heart-canvas {
-          box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+          box-shadow: 0 12px 28px rgba(255, 107, 107, 0.25), 0 2px 8px rgba(0,0,0,0.08);
         }
       `}</style>
     </div>
